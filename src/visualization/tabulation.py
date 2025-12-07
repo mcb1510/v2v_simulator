@@ -15,6 +15,7 @@ from rich.layout import Layout
 from rich.live import Live
 from rich.text import Text
 from rich import box
+import numpy as np
 
 # Add FinalProject to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'FinalProject'))
@@ -228,6 +229,63 @@ class SimulationDisplay:
 
         return table
 
+    def _make_connectivity_matrix(self) -> Table:
+        """Create network connectivity matrix showing which vehicles can communicate."""
+        table = Table(
+            title="[bold]Network Connectivity Matrix[/bold]",
+            box=box.SIMPLE,
+            show_header=True,
+            header_style="bold green"
+        )
+        
+        table.add_column("Vehicle", style="cyan", width=8)
+        table.add_column("Connected To", style="green", width=35)
+        table.add_column("Count", style="yellow", width=6, justify="right")
+        
+        # Get all vehicles
+        vehicles = self.engine.vehicle_manager.get_all_vehicles()
+        
+        # Limit to first 10 vehicles for display
+        display_vehicles = vehicles[:10]
+        
+        for vehicle in display_vehicles:
+            connected_ids = []
+            
+            # Check distance to all other vehicles
+            for other in vehicles:
+                if other. vehicle_id == vehicle.vehicle_id:
+                    continue  # Skip self
+                
+                # Calculate distance using numpy (vehicles have numpy position arrays)
+                import numpy as np
+                distance = np.linalg.norm(vehicle.position - other.position)
+                
+                # Check if within communication range (300m)
+                if distance <= CONFIG.COMMUNICATION_RANGE:
+                    connected_ids.append(other.vehicle_id)
+            
+            # Format the connected vehicles list
+            if connected_ids:
+                connected_str = ", ".join(connected_ids[:6])  # Show first 6
+                if len(connected_ids) > 6:
+                    connected_str += "..."
+            else:
+                connected_str = "[dim]None[/dim]"
+            
+            # Add row to table
+            table.add_row(
+                vehicle.vehicle_id,
+                connected_str,
+                str(len(connected_ids))
+            )
+        
+        # Add caption if there are more vehicles
+        if len(vehicles) > 10:
+            table.caption = f"[dim]Showing 10 of {len(vehicles)} vehicles[/dim]"
+        
+        return table
+    
+
     def _make_layout(self) -> Layout:
         """Create the overall layout combining all display components."""
         layout = Layout()
@@ -255,6 +313,7 @@ class SimulationDisplay:
         # Left side: vehicles and messages
         layout["left"].split_column(
             Layout(name="vehicles"),
+            Layout(name="connectivity"),
             Layout(name="messages")
         )
 
@@ -272,6 +331,7 @@ class SimulationDisplay:
 
         # Update each section
         layout["vehicles"].update(self._make_vehicle_table())
+        layout["connectivity"].update(self._make_connectivity_matrix())
         layout["messages"].update(self._make_message_log_table())
         layout["stats"].update(self._make_statistics_panel())
         layout["config"].update(self._make_config_table())
