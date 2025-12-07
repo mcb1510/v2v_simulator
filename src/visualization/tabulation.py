@@ -42,6 +42,7 @@ class SimulationDisplay:
 
         # Message log (ring buffer)
         self.message_log = deque(maxlen=max_messages)
+        self.cwm_log = deque(maxlen=max_messages)
 
         # Display state
         self.start_time = None
@@ -64,6 +65,16 @@ class SimulationDisplay:
             color = "red"
             details = f"TTC:{message.time_to_collision:.2f}s {message.warning_type}"
             target = message.target_vehicle_id
+            # Also save to dedicated CWM log
+            cwm_entry = {
+                'timestamp': timestamp,
+                'type': msg_type,
+                'sender': message.vehicle_id,
+                'target': target,
+                'details': details,
+                'color': color
+            }
+            self.cwm_log.append(cwm_entry)  # ADD THIS
         else:
             msg_type = "UNK"
             color = "white"
@@ -139,7 +150,7 @@ class SimulationDisplay:
             state = vehicle.get_state_dict()
 
             # Format emergency brake status
-            e_brake = "🚨 YES" if vehicle.emergency_braking else "No"
+            e_brake = " YES" if vehicle.emergency_braking else "No"
             e_brake_style = "bold red" if vehicle.emergency_braking else "green"
 
             table.add_row(
@@ -167,29 +178,29 @@ class SimulationDisplay:
 
         # Build statistics text
         stats_text = Text()
-        stats_text.append("⏱️  Simulation Time: ", style="bold cyan")
+        stats_text.append("⏱  Simulation Time: ", style="bold cyan")
         stats_text.append(f"{stats['simulation_time']:.2f}s\n", style="yellow")
 
-        stats_text.append("🚗 Total Vehicles: ", style="bold cyan")
+        stats_text.append(" Total Vehicles: ", style="bold cyan")
         stats_text.append(f"{stats['vehicle_count']}\n", style="yellow")
 
-        stats_text.append("📡 Total BSMs: ", style="bold cyan")
+        stats_text.append(" Total BSMs: ", style="bold cyan")
         stats_text.append(f"{stats['total_bsm_sent']} ", style="yellow")
         stats_text.append(f"({stats['bsm_rate']:.1f}/s)\n", style="dim yellow")
 
-        stats_text.append("⚠️  Total CWMs: ", style="bold cyan")
+        stats_text.append("  Total CWMs: ", style="bold cyan")
         stats_text.append(f"{stats['total_cwm_sent']}\n", style="red bold")
 
-        stats_text.append("🛡️  Collisions Prevented: ", style="bold cyan")
+        stats_text.append("  Collisions Prevented: ", style="bold cyan")
         stats_text.append(f"{stats['collisions_prevented']}\n", style="green bold")
 
-        stats_text.append("⚡ Speed Ratio: ", style="bold cyan")
+        stats_text.append(" Speed Ratio: ", style="bold cyan")
         stats_text.append(f"{speed_ratio:.1f}x real-time\n", style="magenta")
 
-        stats_text.append("⏱️  Average Latency: ", style="bold cyan")
+        stats_text.append("  Average Latency: ", style="bold cyan")
         stats_text.append(f"{stats['average_latency']:.7f}s\n", style="yellow")
 
-        stats_text.append("📉  Packet Loss: ", style="bold cyan")
+        stats_text.append("  Packet Loss: ", style="bold cyan")
         stats_text.append(f"{(stats['packet_loss'] * 100):.2f}%\n", style="red")
 
         return Panel(
@@ -285,6 +296,36 @@ class SimulationDisplay:
         
         return table
     
+    def _make_cwm_alerts_panel(self) -> Panel:
+        """Create dedicated CWM alerts panel."""
+        
+        # Use dedicated CWM log instead of filtering message_log
+        cwms = list(self.cwm_log)
+        
+        stats = self. engine.get_simulation_stats()
+        total_cwms = stats['total_cwm_sent']
+        
+        alert_text = Text()
+        
+        # Show total count prominently
+        alert_text.append(f"Total CWMs: {total_cwms}\n\n", style="bold yellow")
+        
+        if not cwms or len(cwms) == 0:
+            alert_text.append("No collision warnings yet\n", style="dim green")
+        else:
+            alert_text.append("Recent Warnings:\n", style="bold red")
+            # Show last 5 CWMs
+            for msg in reversed(cwms[-5:]):
+                alert_text.append(f"  ", style="red bold")
+                alert_text.append(f"{msg['sender']} → {msg['target']}: ", style="yellow")
+                alert_text.append(f"{msg['details']}\n", style="white")
+        
+        return Panel(
+            alert_text,
+            title="[bold red] Collision Warnings[/bold red]",
+            border_style="red",
+            box=box.ROUNDED
+        )
 
     def _make_layout(self) -> Layout:
         """Create the overall layout combining all display components."""
@@ -313,6 +354,7 @@ class SimulationDisplay:
         # Left side: vehicles and messages
         layout["left"].split_column(
             Layout(name="vehicles"),
+            Layout(name="cwm_alerts", size=8),
             Layout(name="connectivity"),
             Layout(name="messages")
         )
@@ -333,6 +375,7 @@ class SimulationDisplay:
         layout["vehicles"].update(self._make_vehicle_table())
         layout["connectivity"].update(self._make_connectivity_matrix())
         layout["messages"].update(self._make_message_log_table())
+        layout["cwm_alerts"].update(self._make_cwm_alerts_panel())
         layout["stats"].update(self._make_statistics_panel())
         layout["config"].update(self._make_config_table())
 
