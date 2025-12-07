@@ -65,6 +65,12 @@ class SimulationEngine:
                     self.collisions_prevented += 1
 
                     vehicle.send_message(self.network_sim, cwm)
+                    # Notify message callbacks
+                    for callback in self.message_callbacks:
+                        try:
+                            callback(vehicle, cwm)
+                        except Exception as e:
+                            print(f"Error in CWM message callback: {e}")
 
                 if vehicle.should_send_bsm(current_time):
                     bsm = vehicle.generate_bsm(current_time)

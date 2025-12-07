@@ -1,8 +1,16 @@
 # TEST TO CHECK CONFIG, MESSAGE, VEHICLE, AND SIMULATION ENGINE INTEGRATION
 # 
 # 
-from simulation_engine import simulation_engine
-from config import CONFIG
+import sys
+import os
+
+# Add parent directory to path to treat SimulationEngine as a package
+parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, parent_dir)
+
+# Now import as a package
+from SimulationEngine.simulation_engine import simulation_engine
+from SimulationEngine.config import CONFIG
 import time
 
 
